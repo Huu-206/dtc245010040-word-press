@@ -1,66 +1,189 @@
-version: "3.8"
-
 networks:
   frontend-net:
     driver: bridge
   backend-net:
     driver: bridge
+    internal: true
+  monitoring-net:
+    driver: bridge
 
 volumes:
   db_data:
   wp_data:
+  grafana_data:
+  prometheus_data:
 
 services:
   db:
     image: mysql:8.0
     container_name: wp_mysql
-    restart: always
+    restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
     volumes:
       - db_data:/var/lib/mysql
     networks:
       - backend-net
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: wp_phpmyadmin
-    restart: always
+    restart: unless-stopped
     environment:
       PMA_HOST: db
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
     networks:
       - frontend-net
       - backend-net
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
 
   wordpress:
     image: wordpress:latest
     container_name: wp_app
-    restart: always
+    restart: unless-stopped
     environment:
       WORDPRESS_DB_HOST: db:3306
-      WORDPRESS_DB_USER: ${MYSQL_USER}
-      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
-      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+      WORDPRESS_DB_USER: ${MYSQL_USER:?Set MYSQL_USER in .env}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE:?Set MYSQL_DATABASE in .env}
     volumes:
       - wp_data:/var/www/html
     networks:
       - frontend-net
       - backend-net
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     container_name: wp_nginx
-    restart: always
+    restart: unless-stopped
     ports:
-      - "80:80"
+      - "127.0.0.1:80:80"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
     networks:
       - frontend-net
+      - monitoring-net
     depends_on:
       - wordpress
       - phpmyadmin
+    security_opt:
+      - no-new-privileges:true
+
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: wp_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring-net
+    user: "65534:65534"
+    security_opt:
+      - no-new-privileges:true
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.0
+    container_name: wp_cadvisor
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - monitoring-net
+    security_opt:
+      - no-new-privileges:true
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.1.0
+    container_name: wp_nginx_exporter
+    restart: unless-stopped
+    command:
+      - --nginx.scrape-uri=http://nginx:80/stub_status
+    networks:
+      - monitoring-net
+    depends_on:
+      - nginx
+    security_opt:
+      - no-new-privileges:true
+
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: wp_mysql_exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "root:${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}@(db:3306)/"
+    networks:
+      - backend-net
+      - monitoring-net
+    depends_on:
+      db:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: wp_grafana
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?Set GRAFANA_ADMIN_USER in .env}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring-net
+    user: "472:472"
+    security_opt:
+      - no-new-privileges:true
+
+  loki:
+    image: grafana/loki:2.8.2
+    container_name: wp_loki
+    restart: unless-stopped
+    networks:
+      - monitoring-net
+    user: "10001:10001"
+    security_opt:
+      - no-new-privileges:true
+
+  promtail:
+    image: grafana/promtail:2.8.2
+    container_name: wp_promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring-net
+    depends_on:
+      - loki
+    security_opt:
+      - no-new-privileges:true
