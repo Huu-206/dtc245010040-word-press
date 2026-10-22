@@ -10,7 +10,7 @@ Local WordPress stack with MySQL, phpMyAdmin, Nginx reverse proxy, Prometheus, G
 
 ## Start
 
-1. Keep `.env` local. If setting up a fresh checkout, copy `.env.example` to `.env` and replace every placeholder with unique passwords.
+1. Keep `.env` local. If setting up a fresh checkout, copy `.env.example` to `.env` and replace every placeholder with unique passwords. `APP_ADMIN_USER` and `APP_ADMIN_PASSWORD` are shared by the WordPress administrator, Grafana administrator, and a database-scoped MySQL login for phpMyAdmin.
 2. Generate a local self-signed certificate (the certificate and private key stay local and are ignored by Git):
 
 	```powershell
@@ -21,7 +21,36 @@ Local WordPress stack with MySQL, phpMyAdmin, Nginx reverse proxy, Prometheus, G
 3. Start the services with `docker compose up -d`.
 4. Check service state with `docker compose ps`.
 5. Open WordPress at <https://localhost>, phpMyAdmin at <https://localhost/pma/> (or <https://localhost/phpmyadmin/>), and Grafana at <http://localhost:3000>. Accept the browser warning for the locally self-signed certificate.
-6. Sign in to Grafana with `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` from `.env`. Open the **Monitoring** folder and the **WordPress Stack Overview** dashboard.
+6. Create or reset the WordPress administrator using the shared credentials:
+
+	```powershell
+@'
+<?php
+require '/var/www/html/wp-load.php';
+$username = getenv('APP_ADMIN_USER');
+$password = getenv('APP_ADMIN_PASSWORD');
+$userId = username_exists($username);
+if ($userId) {
+	wp_set_password($password, $userId);
+} else {
+	$userId = wp_create_user($username, $password, 'admin@localhost');
+}
+if (is_wp_error($userId)) {
+	fwrite(STDERR, $userId->get_error_message() . "\n");
+	exit(1);
+}
+(new WP_User($userId))->set_role('administrator');
+?>
+'@ | docker compose exec -T wordpress php
+	```
+
+7. Sign in to Grafana and WordPress with `APP_ADMIN_USER` and `APP_ADMIN_PASSWORD` from `.env`. In phpMyAdmin, use the same credentials to access the WordPress database. Open the **Monitoring** folder and the **WordPress Stack Overview** dashboard in Grafana.
+
+## Product website
+
+The `Nem Xứ Thanh` theme is mounted read-only from `wordpress/themes/nem-xu-thanh`. It is active in this local WordPress database; on a fresh install, activate it under **Appearance → Themes**. Product buttons scroll to the request form, which stores pending inquiries under **wp-admin → Đơn nem**. The form does not charge or process payment.
+
+The sample pack sizes and prices are placeholders. Replace them in `nem_xu_thanh_products()` in the theme's `functions.php` and update the product story, ingredients, shelf life, handling guidance, contact details, and delivery terms with information verified by the actual producer before accepting real orders. The hero photo is by Ron Diggity under CC BY 2.0; its attribution and license are linked in the page footer.
 
 Prometheus and Loki are reachable by Grafana and exporters only on the Docker monitoring network; their ports are not published on the host. MySQL is on an internal-only network. The web and Grafana host ports are bound to localhost.
 
