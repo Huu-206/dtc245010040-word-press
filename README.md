@@ -13,7 +13,7 @@ Local WordPress stack with MySQL, phpMyAdmin, Nginx reverse proxy, Prometheus, G
 2. Start the services with `docker compose up -d`.
 3. Check service state with `docker compose ps`.
 4. Open WordPress at <http://localhost>, phpMyAdmin at <http://localhost/phpmyadmin/>, and Grafana at <http://localhost:3000>.
-5. Sign in to Grafana with `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` from `.env`. The provisioned dashboard is named **WordPress DevOps Lab**.
+5. Sign in to Grafana with `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` from `.env`. Open the **Monitoring** folder and the **WordPress Stack Overview** dashboard.
 
 Prometheus and Loki are reachable by Grafana and exporters only on the Docker monitoring network; their ports are not published on the host. MySQL is on an internal-only network. The web and Grafana host ports are bound to localhost.
 

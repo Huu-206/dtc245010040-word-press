@@ -134,7 +134,10 @@ services:
     container_name: wp_mysql_exporter
     restart: unless-stopped
     environment:
-      DATA_SOURCE_NAME: "root:${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}@(db:3306)/"
+      MYSQLD_EXPORTER_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    command:
+      - --mysqld.address=db:3306
+      - --mysqld.username=root
     networks:
       - backend-net
       - monitoring-net

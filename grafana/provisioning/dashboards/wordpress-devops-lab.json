@@ -44,7 +44,7 @@
   "tags": ["wordpress", "docker"],
   "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
-  "title": "WordPress DevOps Lab",
+  "title": "WordPress Stack Overview",
   "uid": "wordpress-devops-lab",
   "version": 1
 }
