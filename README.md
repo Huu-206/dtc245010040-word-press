@@ -87,6 +87,7 @@ The sample pack sizes and prices are placeholders. Replace them in `nem_xu_thanh
 Select the Loki data source and run:
 
 ```logql
+{job="docker"}
 {container="wp_app"}
 {container=~"wp_.*"} |= "error"
 rate({container="wp_nginx"}[1m])
