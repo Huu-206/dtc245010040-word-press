@@ -5,7 +5,7 @@ Local WordPress stack with MySQL, phpMyAdmin, Nginx reverse proxy, Prometheus, G
 ## Requirements
 
 - Docker Desktop with Docker Compose v2
-- Ports 80, 443, and 3000 available on localhost
+- Ports 80, 443, 9090, and 3000 available on localhost
 - Docker available to generate the local self-signed TLS certificate
 
 ## Start
@@ -48,16 +48,17 @@ if (is_wp_error($userId)) {
 
 ## Access URLs and ports
 
-Only Nginx and Grafana publish ports to the Windows host. They bind to `127.0.0.1`, so they are available from this computer, not from other devices on the network.
+Nginx, Prometheus, and Grafana publish ports to the Windows host. They bind to `127.0.0.1`, so they are available from this computer, not from other devices on the network.
 
 | Service | Address from the host | Port | Notes |
 | --- | --- | ---: | --- |
 | Nginx HTTP | <http://localhost:80> | 80 | Redirects to HTTPS. |
 | WordPress | <https://localhost:443> | 443 | Served through Nginx; accept the local self-signed certificate warning. |
 | phpMyAdmin | <https://localhost:443/pma/> or <https://localhost:443/phpmyadmin/> | 443 | Served through Nginx; both paths open the same phpMyAdmin service. |
+| Prometheus | <http://localhost:9090> | 9090 | Prometheus web UI and query console. |
 | Grafana | <http://localhost:3000> | 3000 | Sign in with `APP_ADMIN_USER` and `APP_ADMIN_PASSWORD` from `.env`. |
 
-The following are Docker-internal addresses and ports. They are not published on the host:
+Services also use the following Docker-internal addresses and ports. Host-published ports are listed above.
 
 | Service | Docker address | Port | Used by |
 | --- | --- | ---: | --- |
@@ -66,14 +67,14 @@ The following are Docker-internal addresses and ports. They are not published on
 | phpMyAdmin | `phpmyadmin:80` | 80 | Nginx reverse proxy. |
 | MySQL | `db:3306` | 3306 | WordPress, phpMyAdmin, and the MySQL exporter on the backend network. |
 | Grafana | `grafana:3000` | 3000 | Monitoring network; the host UI is published at `http://localhost:3000`. |
-| Prometheus | `prometheus:9090` | 9090 | Grafana and exporters on the monitoring network. |
+| Prometheus | `prometheus:9090` | 9090 | Grafana and exporters on the monitoring network; also published to the host at `http://localhost:9090`. |
 | cAdvisor | `cadvisor:8080` | 8080 | Prometheus scrape target. |
 | Nginx exporter | `nginx-exporter:9113` | 9113 | Prometheus scrape target. |
 | MySQL exporter | `mysqld-exporter:9104` | 9104 | Prometheus scrape target. |
 | Loki | `loki:3100` | 3100 | Grafana datasource and Promtail log receiver. |
 | Promtail | `promtail:9080` | 9080 | Internal Promtail HTTP and metrics endpoint. |
 
-Do not open `http://prometheus:9090` or `http://loki:3100` directly in the host browser: Docker service names only resolve inside the Docker network. Use Grafana Explore to query these datasources. For example, select **Prometheus** and run `up`, or select **Loki** and run `{job="nginx_access"}`.
+Docker service names only resolve inside the Docker network. Open the Prometheus UI from the host at <http://localhost:9090>; use Grafana Explore to query either datasource. For example, select **Prometheus** and run `up`, or select **Loki** and run `{job="nginx_access"}`. Loki is available inside Docker at `loki:3100` and is not published directly to the host.
 
 ## Product website
 

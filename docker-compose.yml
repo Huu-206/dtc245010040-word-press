@@ -107,6 +107,8 @@ services:
     image: prom/prometheus:v2.45.0
     container_name: wp_prometheus
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
